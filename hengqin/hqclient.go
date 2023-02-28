@@ -21,8 +21,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/go-resty/resty/v2"
 	"github.com/urchinfs/hengqin-sdk/types"
-	"gopkg.in/resty.v1"
 	"io"
 	"net/http"
 	"path/filepath"
@@ -32,37 +32,37 @@ import (
 )
 
 type Client interface {
-	BucketExists(ctx context.Context, bucketName string) (bool, error)
+	StorageVolExists(ctx context.Context, storageVolName string) (bool, error)
 
-	MakeBucket(ctx context.Context, bucketName string) (err error)
+	MakeStorageVol(ctx context.Context, storageVolName string) (err error)
 
-	RemoveBucket(ctx context.Context, bucketName string) (err error)
+	RemoveStorageVol(ctx context.Context, storageVolName string) (err error)
 
-	ListBuckets(ctx context.Context) ([]BucketInfo, error)
+	ListStorageVols(ctx context.Context) ([]StorageVolInfo, error)
 
-	StatObject(ctx context.Context, bucketName, objectName string) (ObjectInfo, error)
+	StatFile(ctx context.Context, storageVolName, fileName string) (FileInfo, error)
 
-	GetObject(ctx context.Context, bucketName, objectName string) (io.ReadCloser, error)
+	GetFile(ctx context.Context, storageVolName, fileName string) (io.ReadCloser, error)
 
-	PutObject(ctx context.Context, bucketName, objectKey, digest string, reader io.Reader) error
+	UploadFile(ctx context.Context, storageVolName, fileName, digest string, reader io.Reader) error
 
-	DeleteObject(ctx context.Context, bucketName, objectKey string) error
+	RemoveFile(ctx context.Context, storageVolName, fileName string) error
 
-	DeleteObjects(ctx context.Context, bucketName string, objects []*ObjectInfo) error
+	RemoveFiles(ctx context.Context, storageVolName string, files []*FileInfo) error
 
-	ListObjects(ctx context.Context, bucketName, prefix, marker string, limit int64) ([]*ObjectInfo, error)
+	ListFiles(ctx context.Context, storageVolName, prefix, marker string, limit int64) ([]*FileInfo, error)
 
-	ListFolderObjects(ctx context.Context, bucketName, prefix string) ([]*ObjectInfo, error)
+	ListDirFiles(ctx context.Context, storageVolName, prefix string) ([]*FileInfo, error)
 
-	IsObjectExist(ctx context.Context, bucketName, objectKey string) (bool, error)
+	IsFileExist(ctx context.Context, storageVolName, fileName string) (bool, error)
 
-	IsBucketExist(ctx context.Context, bucketName string) (bool, error)
+	IsStorageVolExist(ctx context.Context, storageVolName string) (bool, error)
 
-	GetSignURL(ctx context.Context, bucketName, objectKey string, expire time.Duration) (string, error)
+	GetDownloadLink(ctx context.Context, storageVolName, fileName string, expire time.Duration) (string, error)
 
-	CreateFolder(ctx context.Context, bucketName, folderName string) error
+	CreateDir(ctx context.Context, storageVolName, folderName string) error
 
-	GetFolderMetadata(ctx context.Context, bucketName, folderKey string) (*ObjectInfo, bool, error)
+	GetDirMetadata(ctx context.Context, storageVolName, folderKey string) (*FileInfo, bool, error)
 }
 
 type client struct {
@@ -125,7 +125,7 @@ type Reply struct {
 	Message string `json:"message"`
 }
 
-type BucketListReply struct {
+type StorageVolListReply struct {
 	Metadata struct {
 		Total int64 `json:"total"`
 	} `json:"metadata"`
@@ -140,38 +140,38 @@ type BucketListReply struct {
 	} `json:"items"`
 }
 
-type BucketRequest struct {
+type StorageVolRequest struct {
 	Storage string `json:"storage"`
 }
 
-type BucketSpec struct {
+type StorageVolSpec struct {
 	StorageClassName string `json:"storageClassName"`
 	Acl              struct {
 		Project string `json:"project"`
 	} `json:"acl"`
 	Resources struct {
-		Requests BucketRequest `json:"requests"`
+		Requests StorageVolRequest `json:"requests"`
 	} `json:"resources"`
 }
 
-type BucketMetadata struct {
+type StorageVolMetadata struct {
 	Name   string   `json:"name"`
 	Labels []string `json:"labels"`
 }
 
-type MakeBucketRequest struct {
-	Metadata BucketMetadata `json:"metadata"`
-	Spec     BucketSpec     `json:"spec"`
+type MakeStorageVolRequest struct {
+	Metadata StorageVolMetadata `json:"metadata"`
+	Spec     StorageVolSpec     `json:"spec"`
 }
 
-type BucketInfo struct {
-	// The name of the bucket.
+type StorageVolInfo struct {
+	// The name of the storageVol.
 	Name string `json:"name"`
-	// Date the bucket was created.
+	// Date the storageVol was created.
 	CreationDate time.Time `json:"creationDate"`
 }
 
-type CreateFolderReq struct {
+type CreateDirReq struct {
 	Path string `json:"path"`
 }
 
@@ -214,31 +214,31 @@ func (h *client) refreshToken() error {
 			return err
 		}
 
-		reqToken := GetTokenRequest{
-			Auth: struct {
-				Identity TokenIdentity `json:"identity"`
-				Scope    TokenScope    `json:"scope"`
-			}{
-				Identity: TokenIdentity{
-					Methods: []string{"token"},
-					Token: TokenId{
-						Id: token,
-					},
-				},
-				Scope: TokenScope{
-					Project: AuthProject{Id: h.namespaceId},
-				},
-			},
-		}
-
-		jsonBody, err = json.Marshal(reqToken)
-		if err != nil {
-			return err
-		}
-		token, err = h.getToken(h.hqUrl+"/api/auth/v3/auth/tokens", jsonBody)
-		if err != nil {
-			return err
-		}
+		//reqToken := GetTokenRequest{
+		//	Auth: struct {
+		//		Identity TokenIdentity `json:"identity"`
+		//		Scope    TokenScope    `json:"scope"`
+		//	}{
+		//		Identity: TokenIdentity{
+		//			Methods: []string{"token"},
+		//			Token: TokenId{
+		//				Id: token,
+		//			},
+		//		},
+		//		Scope: TokenScope{
+		//			Project: AuthProject{Id: h.namespaceId},
+		//		},
+		//	},
+		//}
+		//
+		//jsonBody, err = json.Marshal(reqToken)
+		//if err != nil {
+		//	return err
+		//}
+		//token, err = h.getToken(h.hqUrl+"/api/auth/v3/auth/tokens", jsonBody)
+		//if err != nil {
+		//	return err
+		//}
 
 		h.token = token
 		h.tokenExpireTimestamp = nowTime + types.TokenExpireTime
@@ -247,7 +247,7 @@ func (h *client) refreshToken() error {
 	return nil
 }
 
-type ObjectListReply struct {
+type FileListReply struct {
 	Items []struct {
 		IsDir bool   `json:"isDir"`
 		Mtime string `json:"mtime"`
@@ -256,7 +256,7 @@ type ObjectListReply struct {
 	}
 }
 
-type ObjectInfo struct {
+type FileInfo struct {
 	Key          string
 	Size         int64
 	ETag         string
@@ -266,52 +266,68 @@ type ObjectInfo struct {
 	Metadata     http.Header
 }
 
-func (h *client) findBucketByName(bucketName string) (string, error) {
-	hqPath := fmt.Sprintf("/api/compute/v2/namespace/%s/volume/", h.namespaceId)
-	r := &Reply{}
-	response, err := h.httpClient.R().
-		SetHeader(types.AuthHeader, h.token).
-		SetResult(r).
-		Get(h.hqUrl + hqPath)
-	if err != nil {
-		return "", err
-	}
+func (h *client) findStorageVolByName(storageVolName string) (string, error) {
+	pageIndex := 0
+	const (
+		pageSize = 100
+	)
 
-	if !response.IsSuccess() {
+	for {
+		hqPath := fmt.Sprintf("/api/compute/v2/namespace/%s/volume/?offset=%d&limit=%d&sort=-created_at", h.namespaceId, pageIndex, pageSize)
 		r := &Reply{}
-		err = json.Unmarshal(response.Body(), r)
+		response, err := h.httpClient.R().
+			SetHeader(types.AuthHeader, h.token).
+			SetResult(r).
+			Get(h.hqUrl + hqPath)
 		if err != nil {
-			return "", errors.New("NoSuchBucket")
+			return "", err
 		}
 
-		return "", errors.New("Code:" + strconv.FormatInt(r.Code, 10) + ", Msg:" + r.Message)
-	}
+		if !response.IsSuccess() {
+			r := &Reply{}
+			err = json.Unmarshal(response.Body(), r)
+			if err != nil {
+				return "", errors.New("NoSuchBucket")
+			}
 
-	resp := &BucketListReply{}
-	err = json.Unmarshal(response.Body(), resp)
-	if err != nil {
-		return "", err
-	}
-
-	for _, bucket := range resp.Items {
-		if bucketName == bucket.Metadata.Name {
-			return bucket.Metadata.Uid, nil
+			return "", errors.New("Code:" + strconv.FormatInt(r.Code, 10) + ", Msg:" + r.Message)
 		}
+
+		resp := &StorageVolListReply{}
+		err = json.Unmarshal(response.Body(), resp)
+		if err != nil {
+			return "", err
+		}
+
+		for _, storageVol := range resp.Items {
+			if storageVolName == storageVol.Metadata.Name {
+				return storageVol.Metadata.Uid, nil
+			}
+		}
+
+		if len(resp.Items) < pageSize {
+			break
+		}
+
+		pageIndex += pageSize
 	}
 
 	return "", nil
 }
 
-func (h *client) findObjectByName(bucketName, objectName string, idDir bool) (ObjectInfo, error) {
-	fileName := filepath.Base(objectName)
-	filePath := filepath.Dir(objectName)
+func (h *client) findFileByName(storageVolName, fileKey string, idDir bool) (FileInfo, error) {
+	fileName := filepath.Base(fileKey)
+	filePath := filepath.Dir(fileKey)
+	if idDir && strings.HasSuffix(fileKey, "/") {
+		filePath = filepath.Dir(filePath)
+	}
 	if filePath == "." || filePath == ".." {
 		filePath = "/"
 	}
 
-	volumeId, err := h.findBucketByName(bucketName)
+	volumeId, err := h.findStorageVolByName(storageVolName)
 	if err != nil {
-		return ObjectInfo{}, err
+		return FileInfo{}, err
 	}
 
 	hqPath := fmt.Sprintf("/api/storage/v2/namespace/%s/volume/%s/folder?path=%s", h.namespaceId, volumeId, filePath)
@@ -319,49 +335,49 @@ func (h *client) findObjectByName(bucketName, objectName string, idDir bool) (Ob
 		SetHeader(types.AuthHeader, h.token).
 		Get(h.hqUrl + hqPath)
 	if err != nil {
-		return ObjectInfo{}, err
+		return FileInfo{}, err
 	}
 
 	if !response.IsSuccess() {
 		r := &Reply{}
 		err = json.Unmarshal(response.Body(), r)
 		if err != nil {
-			return ObjectInfo{}, errors.New("internal error")
+			return FileInfo{}, errors.New("internal error")
 		}
 
-		return ObjectInfo{}, errors.New("Code:" + strconv.FormatInt(r.Code, 10) + ", Msg:" + r.Message)
+		return FileInfo{}, errors.New("Code:" + strconv.FormatInt(r.Code, 10) + ", Msg:" + r.Message)
 	}
 
-	resp := &ObjectListReply{}
+	resp := &FileListReply{}
 	err = json.Unmarshal(response.Body(), &resp.Items)
 	if err != nil {
-		return ObjectInfo{}, err
+		return FileInfo{}, err
 	}
 
-	for _, object := range resp.Items {
-		if fileName == object.Name && idDir == object.IsDir {
-			timeObj, err := time.ParseInLocation(time.RFC3339Nano, object.Mtime, time.Local)
+	for _, file := range resp.Items {
+		if fileName == file.Name && idDir == file.IsDir {
+			timeObj, err := time.ParseInLocation(time.RFC3339Nano, file.Mtime, time.Local)
 			if err != nil {
 				timeObj = time.Time{}
 			}
 
-			return ObjectInfo{
-				Key:          object.Name,
-				Size:         object.Size,
+			return FileInfo{
+				Key:          file.Name,
+				Size:         file.Size,
 				LastModified: timeObj,
 			}, nil
 		}
 	}
 
-	return ObjectInfo{}, errors.New("NoSuchKey")
+	return FileInfo{}, errors.New("NoSuchKey")
 }
 
-func (h *client) BucketExists(ctx context.Context, bucketName string) (bool, error) {
+func (h *client) StorageVolExists(ctx context.Context, storageVolName string) (bool, error) {
 	if err := h.refreshToken(); err != nil {
 		return false, err
 	}
 
-	volumeId, err := h.findBucketByName(bucketName)
+	volumeId, err := h.findStorageVolByName(storageVolName)
 	if err != nil || volumeId == "" {
 		return false, err
 	}
@@ -369,21 +385,21 @@ func (h *client) BucketExists(ctx context.Context, bucketName string) (bool, err
 	return true, nil
 }
 
-func (h *client) MakeBucket(ctx context.Context, bucketName string) (err error) {
+func (h *client) MakeStorageVol(ctx context.Context, storageVolName string) (err error) {
 	if err := h.refreshToken(); err != nil {
 		return err
 	}
 
 	const (
-		defaultBucketSize = 1024 * 5
+		defaultStorageVolSize = 1024 * 5
 	)
 
-	req := MakeBucketRequest{
-		Metadata: BucketMetadata{
-			Name:   bucketName,
+	req := MakeStorageVolRequest{
+		Metadata: StorageVolMetadata{
+			Name:   storageVolName,
 			Labels: []string{},
 		},
-		Spec: BucketSpec{
+		Spec: StorageVolSpec{
 			StorageClassName: "managed-nfs-storage",
 			Acl: struct {
 				Project string `json:"project"`
@@ -391,10 +407,10 @@ func (h *client) MakeBucket(ctx context.Context, bucketName string) (err error) 
 				Project: "ReadWrite",
 			},
 			Resources: struct {
-				Requests BucketRequest `json:"requests"`
+				Requests StorageVolRequest `json:"requests"`
 			}{
-				Requests: BucketRequest{
-					Storage: strconv.FormatInt(defaultBucketSize, 10) + "Gi",
+				Requests: StorageVolRequest{
+					Storage: strconv.FormatInt(defaultStorageVolSize, 10) + "Gi",
 				},
 			},
 		},
@@ -427,21 +443,21 @@ func (h *client) MakeBucket(ctx context.Context, bucketName string) (err error) 
 	return nil
 }
 
-func (h *client) RemoveBucket(ctx context.Context, bucketName string) (err error) {
+func (h *client) RemoveStorageVol(ctx context.Context, storageVolName string) (err error) {
 	if err := h.refreshToken(); err != nil {
 		return err
 	}
 
-	bucketId, err := h.findBucketByName(bucketName)
+	storageVolId, err := h.findStorageVolByName(storageVolName)
 	if err != nil {
 		return err
 	}
 
-	if bucketId == "" {
-		return errors.New("NoSuchBucket")
+	if storageVolId == "" {
+		return errors.New("NoSuchStorageVol")
 	}
 
-	hqPath := fmt.Sprintf("/api/compute/v2/namespace/%s/volume/%s", h.namespaceId, bucketId)
+	hqPath := fmt.Sprintf("/api/compute/v2/namespace/%s/volume/%s", h.namespaceId, storageVolId)
 	r := &Reply{}
 	response, err := h.httpClient.R().
 		SetHeader(types.AuthHeader, h.token).
@@ -457,71 +473,88 @@ func (h *client) RemoveBucket(ctx context.Context, bucketName string) (err error
 	return nil
 }
 
-func (h *client) ListBuckets(ctx context.Context) ([]BucketInfo, error) {
+func (h *client) ListStorageVols(ctx context.Context) ([]StorageVolInfo, error) {
 	if err := h.refreshToken(); err != nil {
-		return []BucketInfo{}, err
+		return []StorageVolInfo{}, err
 	}
 
-	var bucketsInfo []BucketInfo
-	hqPath := fmt.Sprintf("/api/compute/v2/namespace/%s/volume/", h.namespaceId)
-	r := &Reply{}
-	response, err := h.httpClient.R().
-		SetHeader(types.AuthHeader, h.token).
-		SetResult(r).
-		Get(h.hqUrl + hqPath)
-	if err != nil {
-		return bucketsInfo, err
-	}
+	pageIndex := 0
+	const (
+		pageSize = 100
+	)
 
-	if !response.IsSuccess() {
-		return bucketsInfo, errors.New("NoSuchBucket")
-	}
-
-	resp := &BucketListReply{}
-	err = json.Unmarshal(response.Body(), resp)
-	if err != nil {
-		return bucketsInfo, err
-	}
-
-	for _, bucket := range resp.Items {
-		timeObj, err := time.ParseInLocation(time.RFC3339Nano, bucket.Metadata.CreationTimestamp, time.Local)
+	var storageVolsInfo []StorageVolInfo
+	for {
+		hqPath := fmt.Sprintf("/api/compute/v2/namespace/%s/volume/?offset=%d&limit=%d&sort=-created_at", h.namespaceId, pageIndex, pageSize)
+		r := &Reply{}
+		response, err := h.httpClient.R().
+			SetHeader(types.AuthHeader, h.token).
+			SetResult(r).
+			Get(h.hqUrl + hqPath)
 		if err != nil {
-			timeObj = time.Time{}
+			return storageVolsInfo, err
 		}
 
-		bucketsInfo = append(bucketsInfo, BucketInfo{
-			Name:         bucket.Metadata.Name,
-			CreationDate: timeObj,
-		})
+		if !response.IsSuccess() {
+			return storageVolsInfo, errors.New("NoSuchStorageVol")
+		}
+
+		resp := &StorageVolListReply{}
+		err = json.Unmarshal(response.Body(), resp)
+		if err != nil {
+			return storageVolsInfo, err
+		}
+
+		for _, storageVol := range resp.Items {
+			timeObj, err := time.ParseInLocation(time.RFC3339Nano, storageVol.Metadata.CreationTimestamp, time.Local)
+			if err != nil {
+				timeObj = time.Time{}
+			}
+
+			storageVolsInfo = append(storageVolsInfo, StorageVolInfo{
+				Name:         storageVol.Metadata.Name,
+				CreationDate: timeObj,
+			})
+		}
+
+		if len(resp.Items) < pageSize {
+			break
+		}
+
+		pageIndex += pageSize
 	}
 
-	return bucketsInfo, nil
+	return storageVolsInfo, nil
 }
 
-func (h *client) StatObject(ctx context.Context, bucketName, objectName string) (ObjectInfo, error) {
+func (h *client) StatFile(ctx context.Context, storageVolName, fileName string) (FileInfo, error) {
 	if err := h.refreshToken(); err != nil {
-		return ObjectInfo{}, err
+		return FileInfo{}, err
 	}
 
-	objectInfo, err := h.findObjectByName(bucketName, objectName, false)
+	fileInfo, err := h.findFileByName(storageVolName, fileName, false)
 	if err != nil {
-		return ObjectInfo{}, err
+		if strings.Contains(err.Error(), "doesn't exist") {
+			return FileInfo{}, errors.New("NoSuchKey")
+		} else {
+			return FileInfo{}, err
+		}
 	}
 
-	return objectInfo, nil
+	return fileInfo, nil
 }
 
-func (h *client) GetObject(ctx context.Context, bucketName, objectName string) (io.ReadCloser, error) {
+func (h *client) GetFile(ctx context.Context, storageVolName, fileName string) (io.ReadCloser, error) {
 	if err := h.refreshToken(); err != nil {
 		return nil, err
 	}
 
-	volumeId, err := h.findBucketByName(bucketName)
+	volumeId, err := h.findStorageVolByName(storageVolName)
 	if err != nil {
 		return nil, err
 	}
 
-	hqPath := fmt.Sprintf("/api/storage/v2/namespace/%s/volume/%s/file?path=%s", h.namespaceId, volumeId, objectName)
+	hqPath := fmt.Sprintf("/api/storage/v2/namespace/%s/volume/%s/file?path=%s", h.namespaceId, volumeId, fileName)
 	response, err := h.httpClient.R().
 		SetHeader(types.AuthHeader, h.token).
 		SetDoNotParseResponse(true).
@@ -543,23 +576,23 @@ func (h *client) GetObject(ctx context.Context, bucketName, objectName string) (
 	return response.RawBody(), nil
 }
 
-func (h *client) PutObject(ctx context.Context, bucketName, objectKey, digest string, reader io.Reader) error {
+func (h *client) UploadFile(ctx context.Context, storageVolName, filePath, digest string, reader io.Reader) error {
 	if err := h.refreshToken(); err != nil {
 		return err
 	}
 
-	volumeId, err := h.findBucketByName(bucketName)
+	volumeId, err := h.findStorageVolByName(storageVolName)
 	if err != nil {
 		return err
 	}
 
-	fileName := filepath.Base(objectKey)
+	fileName := filepath.Base(filePath)
 	hqPath := fmt.Sprintf("/api/storage/v2/namespace/%s/volume/%s/file", h.namespaceId, volumeId)
 	r := &Reply{}
 	response, err := h.httpClient.R().
 		SetHeader(types.AuthHeader, h.token).
 		SetHeader("Content-Type", "multipart/form-data").
-		SetQueryParam("path", objectKey).
+		SetQueryParam("path", filePath).
 		SetFileReader("file", fileName, reader).
 		SetResult(r).
 		Post(h.hqUrl + hqPath)
@@ -579,17 +612,17 @@ func (h *client) PutObject(ctx context.Context, bucketName, objectKey, digest st
 	return nil
 }
 
-func (h *client) DeleteObject(ctx context.Context, bucketName, objectKey string) error {
+func (h *client) RemoveFile(ctx context.Context, storageVolName, fileName string) error {
 	if err := h.refreshToken(); err != nil {
 		return err
 	}
 
-	volumeId, err := h.findBucketByName(bucketName)
+	volumeId, err := h.findStorageVolByName(storageVolName)
 	if err != nil {
 		return err
 	}
 
-	hqPath := fmt.Sprintf("/api/storage/v2/namespace/%s/volume/%s/file?path=%s", h.namespaceId, volumeId, objectKey)
+	hqPath := fmt.Sprintf("/api/storage/v2/namespace/%s/volume/%s/file?path=%s", h.namespaceId, volumeId, fileName)
 	response, err := h.httpClient.R().
 		SetHeader(types.AuthHeader, h.token).
 		Delete(h.hqUrl + hqPath)
@@ -604,9 +637,9 @@ func (h *client) DeleteObject(ctx context.Context, bucketName, objectKey string)
 	return nil
 }
 
-func (h *client) DeleteObjects(ctx context.Context, bucketName string, objects []*ObjectInfo) error {
-	for _, obj := range objects {
-		err := h.DeleteObject(ctx, bucketName, obj.Key)
+func (h *client) RemoveFiles(ctx context.Context, storageVolName string, files []*FileInfo) error {
+	for _, obj := range files {
+		err := h.RemoveFile(ctx, storageVolName, obj.Key)
 		if err != nil {
 			return err
 		}
@@ -615,12 +648,12 @@ func (h *client) DeleteObjects(ctx context.Context, bucketName string, objects [
 	return nil
 }
 
-func (h *client) ListObjects(ctx context.Context, bucketName, prefix, marker string, limit int64) ([]*ObjectInfo, error) {
+func (h *client) ListFiles(ctx context.Context, storageVolName, prefix, marker string, limit int64) ([]*FileInfo, error) {
 	if err := h.refreshToken(); err != nil {
 		return nil, err
 	}
 
-	volumeId, err := h.findBucketByName(bucketName)
+	volumeId, err := h.findStorageVolByName(storageVolName)
 	if err != nil {
 		return nil, err
 	}
@@ -630,37 +663,37 @@ func (h *client) ListObjects(ctx context.Context, bucketName, prefix, marker str
 		SetHeader(types.AuthHeader, h.token).
 		Get(h.hqUrl + hqPath)
 	if err != nil {
-		return []*ObjectInfo{}, err
+		return []*FileInfo{}, err
 	}
 
 	if !response.IsSuccess() {
 		r := &Reply{}
 		err = json.Unmarshal(response.Body(), r)
 		if err != nil {
-			return []*ObjectInfo{}, errors.New("internal error")
+			return []*FileInfo{}, errors.New("internal error")
 		}
 
-		return []*ObjectInfo{}, errors.New("Code:" + strconv.FormatInt(r.Code, 10) + ", Msg:" + r.Message)
+		return []*FileInfo{}, errors.New("Code:" + strconv.FormatInt(r.Code, 10) + ", Msg:" + r.Message)
 	}
 
-	resp := &ObjectListReply{}
+	resp := &FileListReply{}
 	err = json.Unmarshal(response.Body(), &resp.Items)
 	if err != nil {
-		return []*ObjectInfo{}, err
+		return []*FileInfo{}, err
 	}
 
-	var objects []*ObjectInfo
-	for _, object := range resp.Items {
-		objects = append(objects, &ObjectInfo{
-			Key:  object.Name,
-			Size: object.Size,
+	var files []*FileInfo
+	for _, file := range resp.Items {
+		files = append(files, &FileInfo{
+			Key:  file.Name,
+			Size: file.Size,
 		})
 	}
 
-	return objects, nil
+	return files, nil
 }
 
-func (h *client) listFolderObjs(volumeId, path string) ([]*ObjectInfo, error) {
+func (h *client) listDirObjs(volumeId, path string) ([]*FileInfo, error) {
 	if path == "." || path == ".." {
 		return nil, nil
 	}
@@ -684,72 +717,84 @@ func (h *client) listFolderObjs(volumeId, path string) ([]*ObjectInfo, error) {
 		return nil, errors.New("Code:" + strconv.FormatInt(r.Code, 10) + ", Msg:" + r.Message)
 	}
 
-	resp := &ObjectListReply{}
+	resp := &FileListReply{}
 	err = json.Unmarshal(response.Body(), &resp.Items)
 	if err != nil {
 		return nil, err
 	}
 
-	var objects []*ObjectInfo
-	for _, object := range resp.Items {
-		if !object.IsDir {
-			objects = append(objects, &ObjectInfo{
-				Key:  object.Name,
-				Size: object.Size,
+	var files []*FileInfo
+	for _, file := range resp.Items {
+		if !file.IsDir {
+			files = append(files, &FileInfo{
+				Key:  filepath.Join(path, file.Name),
+				Size: file.Size,
 			})
 		} else {
-			tmpObjs, err := h.listFolderObjs(volumeId, filepath.Join(path, object.Name))
+			tmpObjs, err := h.listDirObjs(volumeId, filepath.Join(path, file.Name))
 			if err != nil {
 				return nil, err
 			}
 
-			objects = append(objects, tmpObjs...)
+			files = append(files, tmpObjs...)
 		}
 	}
 
-	return objects, nil
+	return files, nil
 }
 
-func (h *client) ListFolderObjects(ctx context.Context, bucketName, prefix string) ([]*ObjectInfo, error) {
+func (h *client) ListDirFiles(ctx context.Context, storageVolName, prefix string) ([]*FileInfo, error) {
 	if err := h.refreshToken(); err != nil {
 		return nil, err
 	}
 
-	volumeId, err := h.findBucketByName(bucketName)
+	volumeId, err := h.findStorageVolByName(storageVolName)
 	if err != nil {
 		return nil, err
 	}
 
-	return h.listFolderObjs(volumeId, prefix)
+	resp, err := h.listDirObjs(volumeId, prefix)
+	if err != nil {
+		return nil, err
+	}
+
+	if !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+	resp = append(resp, &FileInfo{
+		Key: prefix,
+	})
+
+	return resp, nil
 }
 
-func (h *client) IsObjectExist(ctx context.Context, bucketName, objectKey string) (bool, error) {
+func (h *client) IsFileExist(ctx context.Context, storageVolName, fileName string) (bool, error) {
 	if err := h.refreshToken(); err != nil {
 		return false, err
 	}
 
-	objectInfo, err := h.findObjectByName(bucketName, objectKey, false)
-	if err != nil || objectInfo.Key == "" {
+	fileInfo, err := h.findFileByName(storageVolName, fileName, false)
+	if err != nil || fileInfo.Key == "" {
 		return false, err
 	}
 
 	return true, nil
 }
 
-func (h *client) IsBucketExist(ctx context.Context, bucketName string) (bool, error) {
+func (h *client) IsStorageVolExist(ctx context.Context, storageVolName string) (bool, error) {
 	if err := h.refreshToken(); err != nil {
 		return false, err
 	}
 
-	bucketId, err := h.findBucketByName(bucketName)
-	if err != nil || bucketId == "" {
+	storageVolId, err := h.findStorageVolByName(storageVolName)
+	if err != nil || storageVolId == "" {
 		return false, err
 	}
 
 	return true, nil
 }
 
-func (h *client) GetSignURL(ctx context.Context, bucketName, objectKey string, expire time.Duration) (string, error) {
+func (h *client) GetDownloadLink(ctx context.Context, storageVolName, fileName string, expire time.Duration) (string, error) {
 	const (
 		DefaultSignedUrlTime = 60 * 60 * 6
 	)
@@ -762,24 +807,24 @@ func (h *client) GetSignURL(ctx context.Context, bucketName, objectKey string, e
 		return "", err
 	}
 
-	volumeId, err := h.findBucketByName(bucketName)
+	volumeId, err := h.findStorageVolByName(storageVolName)
 	if err != nil {
 		return "", err
 	}
 
 	hqPath := fmt.Sprintf("/api/storage/v2/namespace/%s/volume/%s/file?path=/%s&%s=%s",
-		h.namespaceId, volumeId, objectKey, strings.ToLower(types.AuthHeader), h.token)
+		h.namespaceId, volumeId, fileName, strings.ToLower(types.AuthHeader), h.token)
 	signedUrl := h.hqUrl + hqPath
 
 	return signedUrl, nil
 }
 
-func (h *client) CreateFolder(ctx context.Context, bucketName, folderName string) error {
+func (h *client) CreateDir(ctx context.Context, storageVolName, folderName string) error {
 	if err := h.refreshToken(); err != nil {
 		return err
 	}
 
-	req := CreateFolderReq{
+	req := CreateDirReq{
 		Path: folderName,
 	}
 
@@ -788,7 +833,7 @@ func (h *client) CreateFolder(ctx context.Context, bucketName, folderName string
 		return err
 	}
 
-	volumeId, err := h.findBucketByName(bucketName)
+	volumeId, err := h.findStorageVolByName(storageVolName)
 	if err != nil {
 		return err
 	}
@@ -816,14 +861,22 @@ func (h *client) CreateFolder(ctx context.Context, bucketName, folderName string
 	return nil
 }
 
-func (h *client) GetFolderMetadata(ctx context.Context, bucketName, folderKey string) (*ObjectInfo, bool, error) {
+func (h *client) GetDirMetadata(ctx context.Context, storageVolName, folderKey string) (*FileInfo, bool, error) {
 	if err := h.refreshToken(); err != nil {
 		return nil, false, nil
 	}
 
-	folderInfo, err := h.findObjectByName(bucketName, folderKey, true)
-	if err != nil || folderInfo.Key == "" {
-		return nil, false, err
+	folderInfo, err := h.findFileByName(storageVolName, folderKey, true)
+	if err != nil {
+		if strings.Contains(err.Error(), "doesn't exist") {
+			return nil, false, errors.New("NoSuchKey")
+		} else {
+			return nil, false, err
+		}
+	}
+
+	if folderInfo.Key == "" {
+		return nil, false, nil
 	}
 
 	return &folderInfo, true, nil
