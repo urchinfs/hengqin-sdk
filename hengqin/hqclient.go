@@ -267,36 +267,49 @@ type ObjectInfo struct {
 }
 
 func (h *client) findBucketByName(bucketName string) (string, error) {
-	hqPath := fmt.Sprintf("/api/compute/v2/namespace/%s/volume/", h.namespaceId)
-	r := &Reply{}
-	response, err := h.httpClient.R().
-		SetHeader(types.AuthHeader, h.token).
-		SetResult(r).
-		Get(h.hqUrl + hqPath)
-	if err != nil {
-		return "", err
-	}
+	pageIndex := 0
+	const (
+		pageSize = 100
+	)
 
-	if !response.IsSuccess() {
+	for {
+		hqPath := fmt.Sprintf("/api/compute/v2/namespace/%s/volume/?offset=%d&limit=%d&sort=-created_at", h.namespaceId, pageIndex, pageSize)
 		r := &Reply{}
-		err = json.Unmarshal(response.Body(), r)
+		response, err := h.httpClient.R().
+			SetHeader(types.AuthHeader, h.token).
+			SetResult(r).
+			Get(h.hqUrl + hqPath)
 		if err != nil {
-			return "", errors.New("NoSuchBucket")
+			return "", err
 		}
 
-		return "", errors.New("Code:" + strconv.FormatInt(r.Code, 10) + ", Msg:" + r.Message)
-	}
+		if !response.IsSuccess() {
+			r := &Reply{}
+			err = json.Unmarshal(response.Body(), r)
+			if err != nil {
+				return "", errors.New("NoSuchBucket")
+			}
 
-	resp := &BucketListReply{}
-	err = json.Unmarshal(response.Body(), resp)
-	if err != nil {
-		return "", err
-	}
-
-	for _, bucket := range resp.Items {
-		if bucketName == bucket.Metadata.Name {
-			return bucket.Metadata.Uid, nil
+			return "", errors.New("Code:" + strconv.FormatInt(r.Code, 10) + ", Msg:" + r.Message)
 		}
+
+		resp := &BucketListReply{}
+		err = json.Unmarshal(response.Body(), resp)
+		if err != nil {
+			return "", err
+		}
+
+		for _, bucket := range resp.Items {
+			if bucketName == bucket.Metadata.Name {
+				return bucket.Metadata.Uid, nil
+			}
+		}
+
+		if len(resp.Items) < pageSize {
+			break
+		}
+
+		pageIndex += pageSize
 	}
 
 	return "", nil
@@ -462,37 +475,50 @@ func (h *client) ListBuckets(ctx context.Context) ([]BucketInfo, error) {
 		return []BucketInfo{}, err
 	}
 
+	pageIndex := 0
+	const (
+		pageSize = 100
+	)
+
 	var bucketsInfo []BucketInfo
-	hqPath := fmt.Sprintf("/api/compute/v2/namespace/%s/volume/", h.namespaceId)
-	r := &Reply{}
-	response, err := h.httpClient.R().
-		SetHeader(types.AuthHeader, h.token).
-		SetResult(r).
-		Get(h.hqUrl + hqPath)
-	if err != nil {
-		return bucketsInfo, err
-	}
-
-	if !response.IsSuccess() {
-		return bucketsInfo, errors.New("NoSuchBucket")
-	}
-
-	resp := &BucketListReply{}
-	err = json.Unmarshal(response.Body(), resp)
-	if err != nil {
-		return bucketsInfo, err
-	}
-
-	for _, bucket := range resp.Items {
-		timeObj, err := time.ParseInLocation(time.RFC3339Nano, bucket.Metadata.CreationTimestamp, time.Local)
+	for {
+		hqPath := fmt.Sprintf("/api/compute/v2/namespace/%s/volume/?offset=%d&limit=%d&sort=-created_at", h.namespaceId, pageIndex, pageSize)
+		r := &Reply{}
+		response, err := h.httpClient.R().
+			SetHeader(types.AuthHeader, h.token).
+			SetResult(r).
+			Get(h.hqUrl + hqPath)
 		if err != nil {
-			timeObj = time.Time{}
+			return bucketsInfo, err
 		}
 
-		bucketsInfo = append(bucketsInfo, BucketInfo{
-			Name:         bucket.Metadata.Name,
-			CreationDate: timeObj,
-		})
+		if !response.IsSuccess() {
+			return bucketsInfo, errors.New("NoSuchBucket")
+		}
+
+		resp := &BucketListReply{}
+		err = json.Unmarshal(response.Body(), resp)
+		if err != nil {
+			return bucketsInfo, err
+		}
+
+		for _, bucket := range resp.Items {
+			timeObj, err := time.ParseInLocation(time.RFC3339Nano, bucket.Metadata.CreationTimestamp, time.Local)
+			if err != nil {
+				timeObj = time.Time{}
+			}
+
+			bucketsInfo = append(bucketsInfo, BucketInfo{
+				Name:         bucket.Metadata.Name,
+				CreationDate: timeObj,
+			})
+		}
+
+		if len(resp.Items) < pageSize {
+			break
+		}
+
+		pageIndex += pageSize
 	}
 
 	return bucketsInfo, nil
